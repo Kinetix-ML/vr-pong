@@ -5,31 +5,29 @@
 
 <T.PerspectiveCamera
 	makeDefault
-	position={[0, 5, 10]}
-	on:create={({ ref }) => {
-		ref.lookAt(0, 0, 0);
-	}}
-/>
-
-<T.SpotLight
-	position={[-40, 40, -15]}
-	castShadow
-	on:create={({ ref }) => {
-		ref.castShadow = true;
-		ref.shadow.mapSize = new THREE.Vector2(1024, 1024);
-		ref.shadow.camera.far = 130;
-		ref.shadow.camera.near = 40;
-	}}
-/>
-
-<T.DirectionalLight position={[0, 5, 5]} castShadow />
-<T.Mesh
-	castShadow
-	receiveShadow
+	position={[0, 2, 5]}
+  fov=50
 	on:create={({ ref }) => {
 		ref.lookAt(0, 1, 0);
 	}}
+/>
+
+<T.DirectionalLight position={[4, 6, 4]} castShadow />
+
+<!-- Cube -->
+<T.Mesh
+  castShadow
+  position={[2, 0, -1]}
 >
 	<T.BoxGeometry args={[1, 1, 2]} />
-	<T.MeshBasicMaterial />
+	<T.MeshStandardMaterial color="hotpink"/>
+</T.Mesh>
+
+<!-- Floor -->
+<T.Mesh 
+  receiveShadow 
+  position={[0, -1, -1]}
+>
+  <T.BoxGeometry args={[100, 0.25, 100]}/>
+  <T.MeshStandardMaterial color="white" />
 </T.Mesh>
