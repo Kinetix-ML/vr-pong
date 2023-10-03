@@ -2980,10 +2980,10 @@ kml-pipe-ts@1.0.107:
     npm "^9.8.1"
     roboflow-js "^0.2.32"
 
-kml-pipe-ts@1.0.120:
-  version "1.0.120"
-  resolved "https://registry.yarnpkg.com/kml-pipe-ts/-/kml-pipe-ts-1.0.120.tgz#6761d65e9878a80386d6f1675a3a3fcdbe5dc388"
-  integrity sha512-/iIGMUoIg6p1MQ9aQj7mUw9ZOYQ2b5zJhMe7MHCJ6+KX/LMG2yDPI0U//mTSle9WfJP3NEkcAcIfi5g9G/lpeA==
+kml-pipe-ts@1.0.122:
+  version "1.0.122"
+  resolved "https://registry.yarnpkg.com/kml-pipe-ts/-/kml-pipe-ts-1.0.122.tgz#5a25676120dbfd574785dc9fc81e48e4be46f1a7"
+  integrity sha512-DHoK4VNOdLoNjdFSBjeKi6lJaKnJbH961vthkFtW0vXP5af+H8ii9pcEj2+jJKQ+1+5ypNisvF//NIiq+BNs7A==
   dependencies:
     "@mediapipe/face_mesh" "^0.4.1633559619"
     "@mediapipe/pose" "^0.5.1675469404"

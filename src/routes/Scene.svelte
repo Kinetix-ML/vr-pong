@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { T } from '@threlte/core';
+	import { T, useFrame } from '@threlte/core';
 	import { onMount } from 'svelte';
 	import * as THREE from 'three';
 	import type { KMLPipeline } from 'kml-pipe-ts';
@@ -7,6 +7,10 @@
 	let videoSource: HTMLVideoElement;
 	let pipe: KMLPipeline;
 	let cubeRef: THREE.Object3D;
+	let cubeOrientation = [0, 0, 0];
+	let cubeRotation = [0, 0, 0];
+	let cubePosition = { x: 0, y: 0, z: 0 };
+
 	let processing = false;
 
 	onMount(async () => {
@@ -21,29 +25,45 @@
 			processing = true;
 			let outputs = await pipe.execute([videoSource]);
 			console.log(outputs);
-			if (outputs[1].value) {
+			if (outputs[1].value && outputs[0].value) {
 				console.log('updating pose');
-				cubeRef.lookAt(new THREE.Vector3(...(outputs[1].value as Vec)));
+				cubeOrientation = outputs[1].value as Vec;
+				let z = Math.atan(cubeOrientation[0] / cubeOrientation[1]);
+				let x = Math.atan(cubeOrientation[2] / cubeOrientation[1]);
+				console.log(z);
+				cubeRotation = [x, 0, z];
+				cubePosition = outputs[0].value;
 			}
 			processing = false;
 		}
 		videoSource.requestVideoFrameCallback(runInference); // run inference on every frame
 	}
 
+	const { start, stop, started } = useFrame(
+		() => {
+			console.log('rendering…');
+			//cubeRef.lookAt(new THREE.Vector3(...cubeOrientation));
+		},
+		{
+			autostart: false
+		}
+	);
+
 	async function startWebcam() {
 		const stream = await navigator.mediaDevices.getUserMedia({ video: true });
 		videoSource.srcObject = stream;
 		await videoSource.play();
 		videoSource.requestVideoFrameCallback(runInference);
+		start();
 	}
 </script>
 
 <T.PerspectiveCamera
 	makeDefault
-	position={[0, -2, 5]}
+	position={[0, 1, 1]}
 	fov="50"
 	on:create={({ ref }) => {
-		ref.lookAt(0, -2, 0);
+		ref.lookAt(0, 1, 0);
 	}}
 />
 
@@ -52,12 +72,13 @@
 <!-- Cube -->
 <T.Mesh
 	castShadow
-	position={[0, -2, 0]}
+	position={[-cubePosition.x, cubePosition.y, cubePosition.z]}
+	rotation={cubeRotation}
 	on:create={({ ref }) => {
 		cubeRef = ref;
 	}}
 >
-	<T.BoxGeometry args={[1, 1, 2]} />
+	<T.BoxGeometry args={[0.1, 0.2, 0.1]} />
 	<T.MeshStandardMaterial color="hotpink" />
 </T.Mesh>
 
