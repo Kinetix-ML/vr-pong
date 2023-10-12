@@ -1,15 +1,78 @@
 <script lang="ts">
-	import { T, useFrame } from '@threlte/core';
+	import { T, useFrame, useThrelte } from '@threlte/core';
+	import { OrbitControls } from '@threlte/extras'
 	import { onMount } from 'svelte';
-	import * as THREE from 'three';
+	import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+	import { Group, TextureLoader } from 'three'; 
 	import type { KMLPipeline } from 'kml-pipe-ts';
 	import type { Vec } from 'kml-pipe-ts/dist/types';
+	import { type SkinnedMesh, MeshStandardMaterial, Vector2, Box3 } from 'three';
+	import { RigidBody, Collider, Debug } from '@threlte/rapier';
+
+
 	let videoSource: HTMLVideoElement;
 	let pipe: KMLPipeline;
-	let cubeRef: THREE.Object3D;
-	let cubeOrientation = [0, 0, 0];
-	let cubeRotation = [0, 0, 0];
-	let cubePosition = { x: 0, y: 0, z: 0 };
+
+	let paddleGroupRef: Group;
+	let oPaddleGroupRef: Group;
+
+	let paddleRef: SkinnedMesh;
+	let oPaddleRef: SkinnedMesh;
+
+	let ballRef: THREE.Object3D;
+	let paddeOrientation = [0, 0, 0];
+	let paddleRotation = [0, 0, 0];
+	let paddePosition = { x: 0, y: 0, z: 0 };
+
+	let paddleModel: SkinnedMesh | undefined;
+
+	const { scene } = useThrelte();
+
+	new GLTFLoader().load('paddle.glb', mesh => {
+		paddleRef = mesh.scene.children[0].clone() as SkinnedMesh
+		oPaddleRef = mesh.scene.children[0].clone() as SkinnedMesh
+
+		let tLoader = new TextureLoader()
+		
+		tLoader.load('low_Paddle_BaseColor.jpg', diffuse => {
+			tLoader.load('low_Paddle_Metallic.jpg', metalic => {
+				tLoader.load('low_Paddle_Normal.jpg', normal => {
+					tLoader.load('low_Paddle_Roughness.jpg', roughness => {
+						diffuse.flipY = false
+						metalic.flipY = false
+						normal.flipY = false
+						roughness.flipY = false
+
+						const mat = new MeshStandardMaterial({
+							map: diffuse,
+							normalMap: normal,
+							metalnessMap: metalic,
+							roughnessMap: roughness
+						})
+
+						paddleRef.material = mat
+						oPaddleRef.material = mat
+
+						let box = new Box3().setFromObject(paddleRef)
+						let scale = paddleRef.scale.x*(0.25/(box.max.x - box.min.x))
+
+						paddleRef.scale.set(scale, scale, scale)
+						oPaddleRef.scale.set(scale, scale, scale)
+
+						paddleRef.position.set(0,0,0)
+						oPaddleRef.position.set(0,0,0)
+
+						paddePosition = { x: 0.75, y: 1, z: 2 }
+
+						paddleGroupRef.children[0].add(paddleRef)
+						oPaddleGroupRef.children[0].add(oPaddleRef)
+						
+						console.log(paddleGroupRef)
+					})
+				})
+			})
+		})
+	})
 
 	let processing = false;
 
@@ -24,15 +87,15 @@
 		if (!processing) {
 			processing = true;
 			let outputs = await pipe.execute([videoSource]);
-			console.log(outputs);
+			// console.log(outputs);
 			if (outputs[1].value && outputs[0].value) {
 				console.log('updating pose');
-				cubeOrientation = outputs[1].value as Vec;
-				let z = Math.atan(cubeOrientation[0] / cubeOrientation[1]);
-				let x = Math.atan(cubeOrientation[2] / cubeOrientation[1]);
+				paddeOrientation = outputs[1].value as Vec;
+				let z = Math.atan(paddeOrientation[0] / paddeOrientation[1]);
+				let x = Math.atan(paddeOrientation[2] / paddeOrientation[1]);
 				console.log(z);
-				cubeRotation = [x, 0, z];
-				cubePosition = outputs[0].value;
+				paddleRotation = [x, 0, z];
+				paddePosition = outputs[0].value;
 			}
 			processing = false;
 		}
@@ -40,9 +103,10 @@
 	}
 
 	const { start, stop, started } = useFrame(
-		() => {
+		(_, delta) => {
 			console.log('rendering…');
-			//cubeRef.lookAt(new THREE.Vector3(...cubeOrientation));
+
+			// cubeRef.lookAt(new THREE.Vector3(...cubeOrientation));
 		},
 		{
 			autostart: false
@@ -60,32 +124,119 @@
 
 <T.PerspectiveCamera
 	makeDefault
-	position={[0, 1, 1]}
-	fov="50"
+	position={[-1, 1.4, 4]}
+	fov="70"
 	on:create={({ ref }) => {
-		ref.lookAt(0, 1, 0);
-	}}
-/>
-
-<T.DirectionalLight position={[4, 6, 4]} castShadow />
-
-<!-- Cube -->
-<T.Mesh
-	castShadow
-	position={[-cubePosition.x, cubePosition.y, cubePosition.z]}
-	rotation={cubeRotation}
-	on:create={({ ref }) => {
-		cubeRef = ref;
+		ref.lookAt(0, 0, 0);
 	}}
 >
-	<T.BoxGeometry args={[0.1, 0.2, 0.1]} />
+	<OrbitControls/>
+</T.PerspectiveCamera>
+
+<T.DirectionalLight position={[4, 6, 4]} castShadow />
+<T.AmbientLight />
+
+<!-- Ball -->
+<T.Group
+	position={[0,3,0]}
+>
+<RigidBody type='dynamic'>
+<T.Mesh
+	castShadow
+	on:create={({ ref }) => {
+		ballRef = ref;
+	}}
+>
+<T.SphereGeometry args={[0.03]} />
+<T.MeshStandardMaterial color="yellowgreen" />
+</T.Mesh>
+
+<Collider
+	restitution={0.9}
+	shape={'ball'}
+	args={[0.03]}
+	mass={1}
+/>
+</RigidBody>
+</T.Group>
+
+<!-- Table -->
+<T.Group
+	position={[0,0,0]}
+>
+<RigidBody type='fixed'>
+<T.Mesh castShadow>
+	<T.BoxGeometry args={[2.5, 1, 4.5]} />
 	<T.MeshStandardMaterial color="hotpink" />
 </T.Mesh>
 
+<Collider
+	restitution={0.6}
+	args={[1.25,0.5,2.25]}
+	shape={'cuboid'}
+/>
+</RigidBody>
+</T.Group>
+
+<!-- Net -->
+<T.Group
+	position={[0,0.575,0]}
+>
+<RigidBody type='fixed'>
+<T.Mesh
+	castShadow
+>
+	<T.BoxGeometry args={[3, 0.35, 0.01]} />
+	<T.MeshStandardMaterial color="hotpink" />
+</T.Mesh>
+
+<Collider
+	restitution={-0.3}
+	args={[1.5,0.175,0.005]}
+	shape={'cuboid'}
+/>
+</RigidBody>
+</T.Group>
+
+<!-- Player Paddle -->
+<T.Group
+	position={[paddePosition.x, paddePosition.y, paddePosition.z]}
+	orientation={paddeOrientation}
+	on:create={({ref}) => paddleGroupRef = ref}
+>
+<RigidBody type='fixed'>
+
+<Collider
+	restitution={0.7}
+	args={[1,1,1]}
+	shape={'cuboid'}
+/>
+</RigidBody>
+</T.Group>
+
+<!-- Other Paddle -->
+<T.Group
+	position={[-paddePosition.x, paddePosition.y, -paddePosition.z]}
+	orientation={paddeOrientation}
+	on:create={({ref}) => oPaddleGroupRef = ref}
+>
+<RigidBody type='fixed'>
+
+<Collider
+	restitution={0.7}
+	args={[1,1,1]}
+	shape={'cuboid'}
+	mass={0}
+/>
+</RigidBody>
+</T.Group>
+
 <!-- Floor -->
-<!-- <T.Mesh receiveShadow position={[0, -1, -1]}>
+<T.Mesh receiveShadow position={[0, -0.5, -1]}>
 	<T.BoxGeometry args={[100, 0.25, 100]} />
-	<T.MeshStandardMaterial color="white" />
-</T.Mesh> -->
+	<T.MeshStandardMaterial color="gray" />
+</T.Mesh>
 
 <video autoplay bind:this={videoSource} />
+
+<Debug />
