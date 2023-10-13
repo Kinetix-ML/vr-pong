@@ -22,7 +22,10 @@
 	let ballRef: THREE.Object3D;
 	let paddeOrientation = [0, 0, 0];
 	let paddleRotation = [0, 0, 0];
-	let paddePosition = { x: 0, y: 0, z: 0 };
+	let paddePosition = { x: 1, y: 1, z: 2 };
+	let paddleSize: [hx: number, hy: number, hz: number] = [0.125, 0.2, 0.017]
+
+	let beganSet = false
 
 	let paddleModel: SkinnedMesh | undefined;
 
@@ -31,6 +34,12 @@
 	new GLTFLoader().load('paddle.glb', mesh => {
 		paddleRef = mesh.scene.children[0].clone() as SkinnedMesh
 		oPaddleRef = mesh.scene.children[0].clone() as SkinnedMesh
+
+		let box = new Box3().setFromObject(paddleRef)
+		let scale = paddleRef.scale.x*(0.25/(box.max.x - box.min.x))
+
+		paddleRef.scale.set(scale, scale, scale)
+		oPaddleRef.scale.set(scale, scale, scale)
 
 		let tLoader = new TextureLoader()
 		
@@ -53,21 +62,13 @@
 						paddleRef.material = mat
 						oPaddleRef.material = mat
 
-						let box = new Box3().setFromObject(paddleRef)
-						let scale = paddleRef.scale.x*(0.25/(box.max.x - box.min.x))
-
-						paddleRef.scale.set(scale, scale, scale)
-						oPaddleRef.scale.set(scale, scale, scale)
-
-						paddleRef.position.set(0,0,0)
-						oPaddleRef.position.set(0,0,0)
+						paddleRef.position.set(0,-0.2,0)
+						oPaddleRef.position.set(0,-0.2,0)
 
 						paddePosition = { x: 0.75, y: 1, z: 2 }
 
 						paddleGroupRef.children[0].add(paddleRef)
 						oPaddleGroupRef.children[0].add(oPaddleRef)
-						
-						console.log(paddleGroupRef)
 					})
 				})
 			})
@@ -138,7 +139,7 @@
 
 <!-- Ball -->
 <T.Group
-	position={[0,3,0]}
+	position={[paddePosition.x,paddePosition.y+0.1,paddePosition.z-0.2]}
 >
 <RigidBody type='dynamic'>
 <T.Mesh
@@ -155,7 +156,7 @@
 	restitution={0.9}
 	shape={'ball'}
 	args={[0.03]}
-	mass={1}
+	mass={beganSet ? 1 : Infinity}
 />
 </RigidBody>
 </T.Group>
@@ -199,35 +200,43 @@
 </T.Group>
 
 <!-- Player Paddle -->
-<T.Group
-	position={[paddePosition.x, paddePosition.y, paddePosition.z]}
-	orientation={paddeOrientation}
-	on:create={({ref}) => paddleGroupRef = ref}
->
-<RigidBody type='fixed'>
 
-<Collider
+<T.Group
+position={[paddePosition.x, paddePosition.y, paddePosition.z]}
+orientation={paddeOrientation}
+on:create={({ref}) => paddleGroupRef = ref}
+>
+<RigidBody type='dynamic'>
+	
+	{#if paddleGroupRef && paddleRef}
+	<Collider
 	restitution={0.7}
-	args={[1,1,1]}
+	args={paddleSize}
 	shape={'cuboid'}
-/>
+	mass={Infinity}
+	/>
+	{/if}
+
 </RigidBody>
 </T.Group>
 
 <!-- Other Paddle -->
 <T.Group
-	position={[-paddePosition.x, paddePosition.y, -paddePosition.z]}
-	orientation={paddeOrientation}
-	on:create={({ref}) => oPaddleGroupRef = ref}
+position={[-paddePosition.x, paddePosition.y, -paddePosition.z]}
+orientation={paddeOrientation}
+on:create={({ref}) => oPaddleGroupRef = ref}
 >
-<RigidBody type='fixed'>
-
-<Collider
+<RigidBody type='dynamic'>
+	
+	{#if oPaddleGroupRef && oPaddleRef}
+	<Collider
 	restitution={0.7}
-	args={[1,1,1]}
+	args={paddleSize}
 	shape={'cuboid'}
-	mass={0}
-/>
+	mass={Infinity}
+	/>
+	{/if}
+
 </RigidBody>
 </T.Group>
 
