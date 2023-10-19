@@ -3,26 +3,31 @@
 	import { OrbitControls } from '@threlte/extras'
 	import { onMount } from 'svelte';
 	import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-	import { Group, TextureLoader } from 'three'; 
+	import { Group, TextureLoader, Vector3 } from 'three'; 
 	import type { KMLPipeline } from 'kml-pipe-ts';
 	import type { Vec } from 'kml-pipe-ts/dist/types';
 	import { type SkinnedMesh, MeshStandardMaterial, Vector2, Box3 } from 'three';
 	import { RigidBody, Collider, Debug } from '@threlte/rapier';
+	import type { RigidBody as RapierRigidBody } from '@dimforge/rapier3d-compat';
 
 
 	let videoSource: HTMLVideoElement;
 	let pipe: KMLPipeline;
 
 	let paddleGroupRef: Group;
-	let oPaddleGroupRef: Group;
-
 	let paddleRef: SkinnedMesh;
+	let paddleRigidbodyRef: RapierRigidBody;
+	
+	let oPaddleGroupRef: Group;
+	let oPaddleRigidbodyRef: RapierRigidBody;
 	let oPaddleRef: SkinnedMesh;
-
+	
+	let ballRigidbodyRef: RapierRigidBody;
 	let ballRef: THREE.Object3D;
+
 	let paddeOrientation = [0, 0, 0];
 	let paddleRotation = [0, 0, 0];
-	let paddePosition = { x: 1, y: 1, z: 2 };
+	let paddlePosition = { x: 1, y: 1, z: 2 };
 	let paddleSize: [hx: number, hy: number, hz: number] = [0.125, 0.2, 0.017]
 
 	let beganSet = false
@@ -62,10 +67,13 @@
 						paddleRef.material = mat
 						oPaddleRef.material = mat
 
+						paddleRef.castShadow = true
+						oPaddleRef.castShadow = true
+
 						paddleRef.position.set(0,-0.2,0)
 						oPaddleRef.position.set(0,-0.2,0)
 
-						paddePosition = { x: 0.75, y: 1, z: 2 }
+						paddlePosition = { x: 0.75, y: 1, z: 2 }
 
 						paddleGroupRef.children[0].add(paddleRef)
 						oPaddleGroupRef.children[0].add(oPaddleRef)
@@ -88,15 +96,17 @@
 		if (!processing) {
 			processing = true;
 			let outputs = await pipe.execute([videoSource]);
-			// console.log(outputs);
+			console.log(outputs);
 			if (outputs[1].value && outputs[0].value) {
 				console.log('updating pose');
 				paddeOrientation = outputs[1].value as Vec;
 				let z = Math.atan(paddeOrientation[0] / paddeOrientation[1]);
 				let x = Math.atan(paddeOrientation[2] / paddeOrientation[1]);
-				console.log(z);
+
+				console.log(paddeOrientation)
+				
 				paddleRotation = [x, 0, z];
-				paddePosition = outputs[0].value;
+				paddlePosition = outputs[0].value;
 			}
 			processing = false;
 		}
@@ -106,6 +116,12 @@
 	const { start, stop, started } = useFrame(
 		(_, delta) => {
 			console.log('rendering…');
+
+			paddleRigidbodyRef.setNextKinematicTranslation(new Vector3(paddlePosition.x, paddlePosition.y, paddlePosition.z*2))
+			paddleRigidbodyRef.setNextKinematicRotation({x: paddleRotation[0], y: paddleRotation[1], z: paddleRotation[2], w: 1})
+			
+			oPaddleRigidbodyRef.setNextKinematicTranslation(new Vector3(-paddlePosition.x, paddlePosition.y, -paddlePosition.z*2))
+			oPaddleRigidbodyRef.setNextKinematicRotation({x: paddleRotation[0], y: paddleRotation[1], z: paddleRotation[2], w: 1})
 
 			// cubeRef.lookAt(new THREE.Vector3(...cubeOrientation));
 		},
@@ -139,9 +155,12 @@
 
 <!-- Ball -->
 <T.Group
-	position={[paddePosition.x,paddePosition.y+0.1,paddePosition.z-0.2]}
+	position={[0.5, 0.8, 2]}
 >
-<RigidBody type='dynamic'>
+<RigidBody 
+type='dynamic'
+bind:rigidBody={ballRigidbodyRef}
+>
 <T.Mesh
 	castShadow
 	on:create={({ ref }) => {
@@ -166,7 +185,7 @@
 	position={[0,0,0]}
 >
 <RigidBody type='fixed'>
-<T.Mesh castShadow>
+<T.Mesh castShadow receiveShadow>
 	<T.BoxGeometry args={[2.5, 1, 4.5]} />
 	<T.MeshStandardMaterial color="hotpink" />
 </T.Mesh>
@@ -175,6 +194,7 @@
 	restitution={0.6}
 	args={[1.25,0.5,2.25]}
 	shape={'cuboid'}
+	mass={Infinity}
 />
 </RigidBody>
 </T.Group>
@@ -195,25 +215,26 @@
 	restitution={-0.3}
 	args={[1.5,0.175,0.005]}
 	shape={'cuboid'}
+	mass={Infinity}
 />
 </RigidBody>
 </T.Group>
 
 <!-- Player Paddle -->
-
 <T.Group
-position={[paddePosition.x, paddePosition.y, paddePosition.z]}
-orientation={paddeOrientation}
 on:create={({ref}) => paddleGroupRef = ref}
 >
-<RigidBody type='dynamic'>
+<RigidBody 
+type='kinematicPosition'
+bind:rigidBody={paddleRigidbodyRef}
+>
 	
 	{#if paddleGroupRef && paddleRef}
 	<Collider
 	restitution={0.7}
 	args={paddleSize}
 	shape={'cuboid'}
-	mass={Infinity}
+	mass={1}
 	/>
 	{/if}
 
@@ -222,18 +243,19 @@ on:create={({ref}) => paddleGroupRef = ref}
 
 <!-- Other Paddle -->
 <T.Group
-position={[-paddePosition.x, paddePosition.y, -paddePosition.z]}
-orientation={paddeOrientation}
 on:create={({ref}) => oPaddleGroupRef = ref}
 >
-<RigidBody type='dynamic'>
+<RigidBody 
+type='kinematicPosition'
+bind:rigidBody={oPaddleRigidbodyRef}
+>
 	
 	{#if oPaddleGroupRef && oPaddleRef}
 	<Collider
 	restitution={0.7}
 	args={paddleSize}
 	shape={'cuboid'}
-	mass={Infinity}
+	mass={1}
 	/>
 	{/if}
 
